@@ -8,10 +8,15 @@ import (
 )
 
 func main() {
-	server := server.CreateServer("127.0.0.1:8080")
-	fmt.Println("Server created at port 8080", server)
+	server1 := server.CreateServer(1, "http://127.0.0.1:8080")
+	fmt.Println("Server created at port 8080")
 
-	if err := loadbalancer.StartServer(); err != nil {
+	server2 := server.CreateServer(2, "http://127.0.0.1:8081")
+	fmt.Println("Server created at port 8081")
+
+	data := &loadbalancer.Data{}
+	data.Servers = append(data.Servers, server1, server2)
+	if err := loadbalancer.StartServer(data); err != nil {
 		log.Fatal(err)
 	}
 	// Should add CLI

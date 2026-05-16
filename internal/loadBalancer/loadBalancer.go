@@ -2,6 +2,7 @@ package loadbalancer
 
 import (
 	"fmt"
+	"loadBalancer/internal/algorithms"
 	"loadBalancer/internal/server"
 	"net/http"
 	"sync"
@@ -9,8 +10,8 @@ import (
 )
 
 type Data struct {
-	servers    *[]server.ServerData
-	algorithm  string
+	Servers    []*server.ServerData
+	Algorithm  string
 	TotalReqs  int
 	FailedReqs int
 	StartTime  time.Time
@@ -18,26 +19,43 @@ type Data struct {
 }
 
 var httpClient = &http.Client{}
+var balancerData = &Data{}
 
-func imageHandler(w http.ResponseWriter, req *http.Request) {
-	fmt.Println(req)
-	resp, err := httpClient.Get("http://127.0.0.1:8080/getImage")
+func handler(w http.ResponseWriter, req *http.Request) {
+	balancerData.mu.Lock()
+	chosenServer := algorithms.LeastConnections(balancerData.Servers, &balancerData.mu)
+	fmt.Println("Request handled by:", chosenServer.Address)
+	chosenServer.ActiveConn++
+	balancerData.mu.Unlock()
+
+	url := fmt.Sprintf("%s%s", chosenServer.Address, req.URL)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	defer resp.Body.Close()
-	fmt.Println(resp.StatusCode)
+
+	defer func() {
+		resp.Body.Close()
+		balancerData.mu.Lock()
+		chosenServer.ActiveConn--
+		balancerData.mu.Unlock()
+	}()
+	// fmt.Println(resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Server did not process", resp.StatusCode)
+	}
 }
 
-func videoHandler(w http.ResponseWriter, req *http.Request) {
-	fmt.Println(req)
-	httpClient.Get("http://127.0.0.1:8080/sendVideo")
-}
-
-func StartServer() error {
-	http.HandleFunc("/getImage", imageHandler)
-	http.HandleFunc("/sendVideo", videoHandler)
+func StartServer(data *Data) error {
+	httpClient.Transport = &http.Transport{
+		MaxIdleConns:        0,
+		MaxIdleConnsPerHost: 1000,
+		MaxConnsPerHost:     0,
+	}
+	balancerData = data
+	http.HandleFunc("/getImage", handler)
+	http.HandleFunc("/sendVideo", handler)
 	fmt.Println("Load balancing Server started at port 3000")
 	err := http.ListenAndServe(":3000", nil)
 	if err != nil {

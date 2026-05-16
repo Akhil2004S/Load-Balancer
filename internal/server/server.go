@@ -6,6 +6,7 @@ import (
 )
 
 type ServerData struct {
+	Id              int
 	Address         string
 	HealthState     health.HealthStatus
 	TotalReqs       int
@@ -16,8 +17,9 @@ type ServerData struct {
 	UnhealthyCount  int
 }
 
-func CreateServer(url string) *ServerData {
+func CreateServer(id int, url string) *ServerData {
 	return &ServerData{
+		Id:      id,
 		Address: url,
 	}
 }
