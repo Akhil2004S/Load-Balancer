@@ -2,7 +2,6 @@ package server
 
 import (
 	"loadBalancer/internal/health"
-	"time"
 )
 
 type ServerData struct {
@@ -11,10 +10,9 @@ type ServerData struct {
 	HealthState     health.HealthStatus
 	TotalReqs       int
 	SuccessReqs     int
+	SuccessRate     float64
 	ActiveConn      int
-	AvgResponseTime time.Time
-	Weight          float64
-	UnhealthyCount  int
+	AvgResponseTime float64
 }
 
 func CreateServer(id int, url string) *ServerData {

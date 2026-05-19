@@ -14,6 +14,7 @@ type Data struct {
 	Algorithm  string
 	TotalReqs  int
 	FailedReqs int
+	Alpha      float64
 	StartTime  time.Time
 	mu         sync.Mutex
 }
@@ -22,17 +23,46 @@ var httpClient = &http.Client{}
 var balancerData = &Data{}
 
 func handler(w http.ResponseWriter, req *http.Request) {
+	// algorithms.LeastResponseTime(balancerData.Servers)
 	balancerData.mu.Lock()
-	chosenServer := algorithms.LeastConnections(balancerData.Servers, &balancerData.mu)
+	var totalResponseTime float64
+	for _, server := range balancerData.Servers {
+		fmt.Printf("Requests handled by server %d is %d\n", server.Id, server.TotalReqs)
+		totalResponseTime += server.AvgResponseTime
+	}
+	balancerData.TotalReqs++
+	chosenServer := algorithms.LeastResponseTime(balancerData.Servers, balancerData.TotalReqs, totalResponseTime, &balancerData.mu)
 	fmt.Println("Request handled by:", chosenServer.Address)
-	chosenServer.ActiveConn++
 	balancerData.mu.Unlock()
 
 	url := fmt.Sprintf("%s%s", chosenServer.Address, req.URL)
+	balancerData.mu.Lock()
+	chosenServer.ActiveConn++
+	chosenServer.TotalReqs++
+	balancerData.mu.Unlock()
+	startTime := time.Now()
 	resp, err := httpClient.Get(url)
+
 	if err != nil {
 		fmt.Println(err)
 		return
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		balancerData.mu.Lock()
+		chosenServer.SuccessReqs++
+		if chosenServer.AvgResponseTime == 0 {
+			chosenServer.AvgResponseTime = float64(time.Since(startTime).Milliseconds())
+		} else {
+			// Avg response time using EMA
+			// AvgRespTime = alpha * newSample + (1 - alpha) * oldAvg
+			chosenServer.AvgResponseTime =
+				balancerData.Alpha*float64(time.Since(startTime).Milliseconds()) + (1-balancerData.Alpha)*chosenServer.AvgResponseTime
+		}
+		chosenServer.SuccessRate = float64(chosenServer.SuccessReqs) / float64(chosenServer.TotalReqs)
+		balancerData.mu.Unlock()
+	} else {
+		http.Error(w, "Server did not process", resp.StatusCode)
 	}
 
 	defer func() {
@@ -41,19 +71,11 @@ func handler(w http.ResponseWriter, req *http.Request) {
 		chosenServer.ActiveConn--
 		balancerData.mu.Unlock()
 	}()
-	// fmt.Println(resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "Server did not process", resp.StatusCode)
-	}
 }
 
 func StartServer(data *Data) error {
-	httpClient.Transport = &http.Transport{
-		MaxIdleConns:        0,
-		MaxIdleConnsPerHost: 1000,
-		MaxConnsPerHost:     0,
-	}
 	balancerData = data
+	balancerData.StartTime = time.Now()
 	http.HandleFunc("/getImage", handler)
 	http.HandleFunc("/sendVideo", handler)
 	fmt.Println("Load balancing Server started at port 3000")

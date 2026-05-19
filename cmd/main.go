@@ -16,6 +16,7 @@ func main() {
 
 	data := &loadbalancer.Data{}
 	data.Servers = append(data.Servers, server1, server2)
+	data.Alpha = 0.1
 	if err := loadbalancer.StartServer(data); err != nil {
 		log.Fatal(err)
 	}
