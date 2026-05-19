@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"loadBalancer/internal/algorithms"
 	"loadBalancer/internal/server"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -23,15 +24,17 @@ var httpClient = &http.Client{}
 var balancerData = &Data{}
 
 func handler(w http.ResponseWriter, req *http.Request) {
-	// algorithms.LeastResponseTime(balancerData.Servers)
 	balancerData.mu.Lock()
+	clientIP, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		fmt.Println(err)
+	}
 	var totalResponseTime float64
 	for _, server := range balancerData.Servers {
-		fmt.Printf("Requests handled by server %d is %d\n", server.Id, server.TotalReqs)
 		totalResponseTime += server.AvgResponseTime
 	}
 	balancerData.TotalReqs++
-	chosenServer := algorithms.LeastResponseTime(balancerData.Servers, balancerData.TotalReqs, totalResponseTime, &balancerData.mu)
+	chosenServer := algorithms.IPHashing(balancerData.Servers, clientIP)
 	fmt.Println("Request handled by:", chosenServer.Address)
 	balancerData.mu.Unlock()
 
