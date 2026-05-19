@@ -1,27 +1,33 @@
 package algorithms
 
 import (
+	"fmt"
 	"loadBalancer/internal/server"
 	"math/rand/v2"
 	"slices"
-	"sync"
 )
 
-func LeastResponseTime(servers []*server.ServerData, totalRequests int, totalResponseTime float64, mu *sync.Mutex) *server.ServerData {
-	if totalRequests <= 10 {
+type LeastResponseTime struct {
+	TotalRequests     int
+	TotalResponseTime float64
+}
+
+func (lrt LeastResponseTime) NextServer(servers []*server.ServerData) *server.ServerData {
+	if lrt.TotalRequests <= 10 {
 		numServers := len(servers)
 		randServer := rand.IntN(numServers)
 		return servers[randServer]
 	}
 	var weights []float64
 	for _, server := range servers {
-		if totalRequests <= 100 {
-			weights = append(weights, calcWeight(1, totalResponseTime, server))
+		if lrt.TotalRequests <= 100 {
+			weights = append(weights, calcWeight(1, lrt.TotalResponseTime, server))
 		} else {
-			alpha := float64(server.TotalReqs) / float64(totalRequests)
-			weights = append(weights, calcWeight(float64(alpha), totalResponseTime, server))
+			alpha := float64(server.TotalReqs) / float64(lrt.TotalRequests)
+			weights = append(weights, calcWeight(float64(alpha), lrt.TotalResponseTime, server))
 		}
 	}
+	fmt.Println(weights)
 
 	isEqual := allEqual(weights)
 	if isEqual {

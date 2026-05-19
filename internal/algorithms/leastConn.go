@@ -3,10 +3,11 @@ package algorithms
 import (
 	"fmt"
 	"loadBalancer/internal/server"
-	"sync"
 )
 
-func LeastConnections(serversData []*server.ServerData, mu *sync.Mutex) *server.ServerData {
+type LeastConnections struct{}
+
+func (lc LeastConnections) NextServer(serversData []*server.ServerData) *server.ServerData {
 	var serverToChoose *server.ServerData
 	leastConn := 999999
 	for _, server := range serversData {

@@ -1,13 +1,19 @@
 package algorithms
 
 import (
+	"fmt"
 	"hash/fnv"
 	"loadBalancer/internal/server"
 )
 
-func IPHashing(servers []*server.ServerData, clientIP string) *server.ServerData {
+type IPHash struct {
+	ClientIP string
+}
+
+func (ipHash IPHash) NextServer(servers []*server.ServerData) *server.ServerData {
+	fmt.Println(ipHash.ClientIP)
 	hasher := fnv.New64()
-	hasher.Write([]byte(clientIP))
+	hasher.Write([]byte(ipHash.ClientIP))
 	hashValue := hasher.Sum64()
 	serverToChoose := hashValue % uint64(len(servers))
 	return servers[serverToChoose]

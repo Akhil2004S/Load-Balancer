@@ -12,7 +12,7 @@ import (
 
 type Data struct {
 	Servers    []*server.ServerData
-	Algorithm  string
+	Algorithm  algorithms.Algorithm
 	TotalReqs  int
 	FailedReqs int
 	Alpha      float64
@@ -25,16 +25,28 @@ var balancerData = &Data{}
 
 func handler(w http.ResponseWriter, req *http.Request) {
 	balancerData.mu.Lock()
+
 	clientIP, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
+
 	var totalResponseTime float64
 	for _, server := range balancerData.Servers {
 		totalResponseTime += server.AvgResponseTime
 	}
 	balancerData.TotalReqs++
-	chosenServer := algorithms.IPHashing(balancerData.Servers, clientIP)
+
+	switch algo := balancerData.Algorithm.(type) {
+	case *algorithms.IPHash:
+		algo.ClientIP = clientIP
+	case *algorithms.LeastResponseTime:
+		algo.TotalRequests = balancerData.TotalReqs
+		algo.TotalResponseTime = totalResponseTime
+	}
+
+	chosenServer := balancerData.Algorithm.NextServer(balancerData.Servers)
 	fmt.Println("Request handled by:", chosenServer.Address)
 	balancerData.mu.Unlock()
 
