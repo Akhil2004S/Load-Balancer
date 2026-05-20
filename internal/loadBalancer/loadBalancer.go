@@ -3,21 +3,28 @@ package loadbalancer
 import (
 	"fmt"
 	"loadBalancer/internal/algorithms"
+	"loadBalancer/internal/health"
 	"loadBalancer/internal/server"
+	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
 type Data struct {
-	Servers    []*server.ServerData
-	Algorithm  algorithms.Algorithm
-	TotalReqs  int
-	FailedReqs int
-	Alpha      float64
-	StartTime  time.Time
-	mu         sync.Mutex
+	Servers       []*server.ServerData
+	ActiveServers []*server.ServerData
+	Algorithm     algorithms.Algorithm
+	TotalReqs     int
+	FailedReqs    int
+	Alpha         float64
+	StartTime     time.Time
+	Done          chan bool
+	mu            sync.Mutex
 }
 
 var httpClient = &http.Client{}
@@ -46,7 +53,7 @@ func handler(w http.ResponseWriter, req *http.Request) {
 		algo.TotalResponseTime = totalResponseTime
 	}
 
-	chosenServer := balancerData.Algorithm.NextServer(balancerData.Servers)
+	chosenServer := balancerData.Algorithm.NextServer(balancerData.ActiveServers)
 	fmt.Println("Request handled by:", chosenServer.Address)
 	balancerData.mu.Unlock()
 
@@ -91,13 +98,30 @@ func handler(w http.ResponseWriter, req *http.Request) {
 func StartServer(data *Data) error {
 	balancerData = data
 	balancerData.StartTime = time.Now()
+	balancerData.Done = make(chan bool)
+
+	health.StartHealthChecker(balancerData.Done, balancerData.Servers, &balancerData.ActiveServers, &balancerData.mu)
+
+	httpServer := &http.Server{
+		Addr: ":3000",
+	}
+
 	http.HandleFunc("/getImage", handler)
 	http.HandleFunc("/sendVideo", handler)
-	fmt.Println("Load balancing Server started at port 3000")
-	err := http.ListenAndServe(":3000", nil)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
+
+	go func() {
+		fmt.Println("Load balancing Server started at port 3000")
+		if err := httpServer.ListenAndServe(); err != nil {
+			log.Fatal("Listen and serve error:", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	balancerData.Done <- true
+	log.Println("Shutting down load balancer")
+	fmt.Println("Exiting...")
+
 	return nil
 }
