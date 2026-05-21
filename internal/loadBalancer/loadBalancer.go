@@ -24,6 +24,7 @@ type Data struct {
 	Alpha         float64
 	StartTime     time.Time
 	Done          chan bool
+	IsStarted     chan bool
 	mu            sync.Mutex
 }
 
@@ -31,6 +32,7 @@ var httpClient = &http.Client{}
 var balancerData = &Data{}
 
 func handler(w http.ResponseWriter, req *http.Request) {
+
 	balancerData.mu.Lock()
 
 	clientIP, _, err := net.SplitHostPort(req.RemoteAddr)
@@ -51,6 +53,12 @@ func handler(w http.ResponseWriter, req *http.Request) {
 	case *algorithms.LeastResponseTime:
 		algo.TotalRequests = balancerData.TotalReqs
 		algo.TotalResponseTime = totalResponseTime
+	}
+
+	if len(balancerData.ActiveServers) == 0 {
+		balancerData.mu.Unlock()
+		http.Error(w, "Servers are not ready yet", http.StatusServiceUnavailable)
+		return
 	}
 
 	chosenServer := balancerData.Algorithm.NextServer(balancerData.ActiveServers)
@@ -99,8 +107,9 @@ func StartServer(data *Data) error {
 	balancerData = data
 	balancerData.StartTime = time.Now()
 	balancerData.Done = make(chan bool)
+	balancerData.IsStarted = make(chan bool)
 
-	health.StartHealthChecker(balancerData.Done, balancerData.Servers, &balancerData.ActiveServers, &balancerData.mu)
+	health.StartHealthChecker(balancerData.Done, balancerData.IsStarted, balancerData.Servers, &balancerData.ActiveServers, &balancerData.mu)
 
 	httpServer := &http.Server{
 		Addr: ":3000",
@@ -109,6 +118,7 @@ func StartServer(data *Data) error {
 	http.HandleFunc("/getImage", handler)
 	http.HandleFunc("/sendVideo", handler)
 
+	<-balancerData.IsStarted
 	go func() {
 		fmt.Println("Load balancing Server started at port 3000")
 		if err := httpServer.ListenAndServe(); err != nil {

@@ -8,32 +8,32 @@ import (
 	"time"
 )
 
-func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex) {
-	defer func() {
-		if r := recover(); r != nil {
-			if server.HealthState == serverData.Healthy || server.HealthState == serverData.Evaluating {
-				mu.Lock()
-				server.HealthState = serverData.Evaluating
-				removeServer(server, activeServers)
+func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex, isStarted chan bool) {
+	url := fmt.Sprintf("%s/health", server.Address)
+	resp, err := http.Get(url)
+	if err != nil {
+		mu.Lock()
+		if server.HealthState == serverData.Healthy || server.HealthState == serverData.Evaluating {
+			switch server.HealthState {
+			case serverData.Evaluating:
 				server.HealthyCount = 0
 				server.UnhealthyCount++
-				mu.Unlock()
-			}
-			if server.HealthState == serverData.Evaluating && (server.UnhealthyCount >= server.UnhealthyThreshold) {
-				mu.Lock()
-				server.HealthState = serverData.Unhealthy
-				server.UnhealthyCount = 0
+			case serverData.Healthy:
+				server.HealthState = serverData.Evaluating
 				removeServer(server, activeServers)
-				mu.Unlock()
-				fmt.Println("Server marked as unhealthy and removed from list. ID:", server.Id)
+				server.UnhealthyCount++
 			}
 		}
-	}()
-	url := fmt.Sprintf("%s/health", server.Address)
-	resp, _ := http.Get(url)
-	fmt.Println(activeServers)
+		if server.HealthState == serverData.Evaluating && (server.UnhealthyCount >= server.UnhealthyThreshold) {
+			server.HealthState = serverData.Unhealthy
+			server.UnhealthyCount = 0
+			removeServer(server, activeServers)
+			fmt.Println("Server marked as unhealthy. ID:", server.Id)
+		}
+		mu.Unlock()
+		return
+	}
 
-	// FIX THIS
 	if resp.StatusCode == http.StatusOK {
 		mu.Lock()
 		if server.HealthState == serverData.Unhealthy || server.HealthState == serverData.Evaluating {
@@ -43,7 +43,7 @@ func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.Ser
 				server.HealthyCount++
 			case serverData.Unhealthy:
 				server.HealthState = serverData.Evaluating
-				removeServer(server, activeServers)
+				server.HealthyCount++
 			}
 		}
 		mu.Unlock()
@@ -62,46 +62,49 @@ func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.Ser
 		mu.Unlock()
 	}
 
-	// FIX THIS BLOCK
+	mu.Lock()
 	if server.HealthState == serverData.Evaluating && (server.HealthyCount >= server.HealthyThreshold) {
-		mu.Lock()
 		server.HealthState = serverData.Healthy
 		server.HealthyCount = 0
-		fmt.Printf("Server with ID:%d has passed the healhy threshold", server.Id)
-		*activeServers = append(*activeServers, server)
-		fmt.Println(activeServers)
-		mu.Unlock()
-		fmt.Println("Server marked as healthy and added to server list. ID:", server.Id)
+		// fmt.Printf("Server with ID:%d has passed the healhy threshold", server.Id)
+		if len(*activeServers) == 0 {
+			*activeServers = append(*activeServers, server)
+			select {
+			case isStarted <- true:
+			default:
+			}
+		} else {
+			*activeServers = append(*activeServers, server)
+		}
+		// fmt.Println(activeServers)
+		// fmt.Println("Server marked as healthy and added to server list. ID:", server.Id)
 	} else if server.HealthState == serverData.Evaluating && (server.UnhealthyCount >= server.UnhealthyThreshold) {
-		mu.Lock()
 		server.HealthState = serverData.Unhealthy
 		server.UnhealthyCount = 0
 		removeServer(server, activeServers)
-		mu.Unlock()
 		fmt.Println("Server marked as unhealthy. ID:", server.Id)
 	}
+	mu.Unlock()
 }
 
 func removeServer(serverToRemove *serverData.ServerData, activeServers *[]*serverData.ServerData) {
-	var indexToRemove int
+	var newServersList []*serverData.ServerData
 	if len(*activeServers) == 0 {
 		return
 	}
-	for id, server := range *activeServers {
+
+	for _, server := range *activeServers {
 		if serverToRemove.Id == server.Id {
-			indexToRemove = id
+			continue
 		} else {
-			fmt.Println("No server to remove")
+			newServersList = append(newServersList, server)
 		}
 	}
-	serversList := *activeServers
-	fmt.Printf("The index to remove is %d and the active server list is %v\n", indexToRemove, *activeServers)
-	serverList := append(serversList[:indexToRemove], serversList[indexToRemove+1:]...)
-	*activeServers = serverList
-	fmt.Println("Server removed from active server list.", activeServers)
+	*activeServers = newServersList
+	// fmt.Println("Server removed from active server list.", activeServers)
 }
 
-func StartHealthChecker(done chan bool, servers []*serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex) {
+func StartHealthChecker(done chan bool, isStarted chan bool, servers []*serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex) {
 	fmt.Println("Health Checker started")
 	ticker := time.NewTicker(time.Second)
 
@@ -110,7 +113,7 @@ func StartHealthChecker(done chan bool, servers []*serverData.ServerData, active
 			select {
 			case <-ticker.C:
 				for _, server := range servers {
-					checkHealth(server, activeServers, mu)
+					checkHealth(server, activeServers, mu, isStarted)
 				}
 			case <-done:
 				fmt.Println("Health checker exited")
