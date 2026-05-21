@@ -1,0 +1,6 @@
+port: 3050
+algorithm: "least_connections"
+alpha: 0.1
+servers:
+  - address: "http://127.0.0.1:8080"
+  - address: "http://127.0.0.1:8081"

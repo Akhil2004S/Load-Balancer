@@ -103,7 +103,7 @@ func handler(w http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-func StartServer(data *Data) error {
+func StartServer(data *Data, port int) error {
 	balancerData = data
 	balancerData.StartTime = time.Now()
 	balancerData.Done = make(chan bool)
@@ -111,8 +111,9 @@ func StartServer(data *Data) error {
 
 	health.StartHealthChecker(balancerData.Done, balancerData.IsStarted, balancerData.Servers, &balancerData.ActiveServers, &balancerData.mu)
 
+	addr := fmt.Sprintf(":%d", port)
 	httpServer := &http.Server{
-		Addr: ":3000",
+		Addr: addr,
 	}
 
 	http.HandleFunc("/getImage", handler)
@@ -120,7 +121,7 @@ func StartServer(data *Data) error {
 
 	<-balancerData.IsStarted
 	go func() {
-		fmt.Println("Load balancing Server started at port 3000")
+		fmt.Println("Load balancing Server started at port", port)
 		if err := httpServer.ListenAndServe(); err != nil {
 			log.Fatal("Listen and serve error:", err)
 		}
