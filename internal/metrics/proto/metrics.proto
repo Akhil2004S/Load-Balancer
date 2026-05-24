@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package metrics;
+
+option go_package = "./proto";
+
+service AppMetrics {
+  rpc GetMetrics(Empty) returns (Metrics);
+}
+
+message Empty{}
+message Metrics {
+  int64 numServers = 1;
+  int64 totalRequests = 2;
+  string algorithm = 3;
+  repeated Health serverHealth = 4;
+}
+
+enum Health {
+  HEALTH_UNSPECIFIED=0;
+  HEALTH_OK =1;
+  HEALTH_NOT_OK=2;
+  HEALTH_EVALUATING=3;
+}
+

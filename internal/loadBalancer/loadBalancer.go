@@ -1,9 +1,11 @@
 package loadbalancer
 
 import (
+	"context"
 	"fmt"
 	"loadBalancer/internal/algorithms"
 	"loadBalancer/internal/health"
+	"loadBalancer/internal/metrics/proto"
 	"loadBalancer/internal/server"
 	"log"
 	"net"
@@ -13,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 type Data struct {
@@ -25,7 +29,7 @@ type Data struct {
 	StartTime     time.Time
 	Done          chan bool
 	IsStarted     chan bool
-	mu            sync.Mutex
+	mu            sync.RWMutex
 }
 
 var httpClient = &http.Client{}
@@ -103,6 +107,43 @@ func handler(w http.ResponseWriter, req *http.Request) {
 	}()
 }
 
+type metricsServer struct {
+	proto.UnimplementedAppMetricsServer
+}
+
+func (server *metricsServer) GetMetrics(ctx context.Context, empty *proto.Empty) (*proto.Metrics, error) {
+	metrics := &proto.Metrics{}
+	balancerData.mu.RLock()
+	switch balancerData.Algorithm.(type) {
+	case algorithms.LeastConnections:
+		metrics.Algorithm = "Least connections"
+	case algorithms.LeastResponseTime:
+		metrics.Algorithm = "Least response time"
+	case algorithms.IPHash:
+		metrics.Algorithm = "IP hash"
+	}
+	metrics.NumServers = int64(len(balancerData.Servers))
+	metrics.TotalRequests = int64(balancerData.TotalReqs)
+
+	for _, server := range balancerData.Servers {
+		healthId := server.HealthState
+		switch healthId {
+		case 0:
+			metrics.ServerHealth = append(metrics.ServerHealth, proto.Health_HEALTH_NOT_OK)
+		case 1:
+			metrics.ServerHealth = append(metrics.ServerHealth, proto.Health_HEALTH_OK)
+		case 2:
+			metrics.ServerHealth = append(metrics.ServerHealth, proto.Health_HEALTH_EVALUATING)
+		}
+	}
+	balancerData.mu.RUnlock()
+	return metrics, nil
+}
+
+func NewMetricsServer() *metricsServer {
+	return &metricsServer{}
+}
+
 func StartServer(data *Data, port int) error {
 	balancerData = data
 	balancerData.StartTime = time.Now()
@@ -125,6 +166,21 @@ func StartServer(data *Data, port int) error {
 		if err := httpServer.ListenAndServe(); err != nil {
 			log.Fatal("Listen and serve error:", err)
 		}
+	}()
+
+	go func() {
+		grpcPort := 9090
+		fmt.Println("Starting gRPC server on port", grpcPort)
+		listener, err := net.Listen("tcp", "127.0.0.1:9090")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		var opts []grpc.ServerOption
+
+		grpcServer := grpc.NewServer(opts...)
+		proto.RegisterAppMetricsServer(grpcServer, NewMetricsServer())
+		grpcServer.Serve(listener)
+
 	}()
 
 	stop := make(chan os.Signal, 1)

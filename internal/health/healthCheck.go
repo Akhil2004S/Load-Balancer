@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex, isStarted chan bool) {
+func checkHealth(server *serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.RWMutex, isStarted chan bool) {
 	url := fmt.Sprintf("%s/health", server.Address)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -104,7 +104,7 @@ func removeServer(serverToRemove *serverData.ServerData, activeServers *[]*serve
 	// fmt.Println("Server removed from active server list.", activeServers)
 }
 
-func StartHealthChecker(done chan bool, isStarted chan bool, servers []*serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.Mutex) {
+func StartHealthChecker(done chan bool, isStarted chan bool, servers []*serverData.ServerData, activeServers *[]*serverData.ServerData, mu *sync.RWMutex) {
 	fmt.Println("Health Checker started")
 	ticker := time.NewTicker(time.Second)
 
