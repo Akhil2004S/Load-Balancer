@@ -187,6 +187,7 @@ func StartServer(data *Data, port int) error {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	balancerData.Done <- true
+	log.Println("Shutting down gRPC server")
 	log.Println("Shutting down load balancer")
 	fmt.Println("Exiting...")
 

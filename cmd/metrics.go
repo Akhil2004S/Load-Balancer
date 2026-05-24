@@ -22,7 +22,10 @@ var metricsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("The metrics are ready\nNumber of servers available:%d\nTotal requests handled:%d\nHealth of server 1:%s\nHealth of server 2:%s", metrics.NumServers, metrics.TotalRequests, metrics.ServerHealth[0], metrics.ServerHealth[1])
+		fmt.Printf("The metrics are ready\nNumber of servers available:%d\nTotal requests handled:%d\n", metrics.NumServers, metrics.TotalRequests)
+		for i, health := range metrics.ServerHealth {
+			fmt.Printf("Health of server %d:%s\n", i+1, health)
+		}
 		return nil
 	},
 }
