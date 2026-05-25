@@ -17,10 +17,10 @@ Each server consists of three health states.
 The health checker runs every second and pings each server's /health endpoint. If a server goes down between health checks, the reactive fallback in the request handler catches the failure and marks it as evaluating immediately.
 
 ## Graceful Shutdown
-Graceful shutdown ensures that the load balancer exits properly when interupped. "When Ctrl+C is received, the health checker is stopped and the load balancer exits. The requests that are queued are dropped and the server stops. This is a known limitation and can be fixed with http.Server().Shutdown()."
+Graceful shutdown ensures that the load balancer exits properly when interupped. So when Ctrl+C is received, the health checker stops and the load balancer exits. The requests that are queued are dropped. This is a known limitation and can be fixed with http.Server().Shutdown().
 
 ## Metrics
-Metrics of the load balancer is obtained using the cli command. Internally, a gRPC server is started when the load balancer starts which responds with the current metrics. The metrics can easily be obtained using API request like /metrics to the load balancer easily. But instead I have implemented a gRPC server because I thought this would be a simple way to learn the working of gRPC.  
+Metrics of the load balancer is obtained using the cli command. Internally, a gRPC server is started when the load balancer starts which responds with the current metrics. The metrics can easily be obtained using API request like /metrics to the load balancer easily. But instead I have implemented a gRPC server to experience the protocol used in production systems.  
 
 ## How to run
 ### Prerequisites
