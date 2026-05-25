@@ -8,12 +8,12 @@ Generally the load balancers I know implement a single algorithm and force the u
 ## Why these algorithms
 Least connection is the simple and easy to understand approach where we don't want to flood the same system with many requests. It is a dynamic approach that distributes based on current traffic.\
 Weighted Least response time is a practical approach that relies on the performance of the server for the distribution. This is dynamic approach as well. This algorithm uses EMA for the calcuation for average response time. EMA stands for Exponential Moving Average. It is a mathematical approach that ensures that the average is not too much biased by a single bad value that occured some time during the process. It uses an alpha value that acts as the confidence factor. Using this formula, the average response time is calculated.\
-Static IP is a static algorithm used to maintain sticky sessions and to ensure request from the same client IP is handled by same server.\
+Static IP is a static algorithm used to maintain sticky sessions and to ensure request from the same client IP is handled by same server.
 ## Health Check
-Each server consists of three health states.\
-1. Healthy - Depicting that the server is healthy and can handle requests sent to it.\
-2. Unhealthy - Depicting that the server is not working and is out of the rotation.\
-3. Evaluating - This means that the server is in a transition state. For a server to be marked as healthy or unhealthy, it has to pass the respective threshold. If the healthy threshold is 5, then it has to respond with 200 stauts code in order to be marked as healthy. During this checking period, the server is out of rotation and is marked as evaluating.\
+Each server consists of three health states.
+1. Healthy - Depicting that the server is healthy and can handle requests sent to it.
+2. Unhealthy - Depicting that the server is not working and is out of the rotation.
+3. Evaluating - This means that the server is in a transition state. For a server to be marked as healthy or unhealthy, it has to pass the respective threshold. If the healthy threshold is 5, then it has to respond with 200 stauts code in order to be marked as healthy. During this checking period, the server is out of rotation and is marked as evaluating.
 The health checker runs every second and pings each server's /health endpoint. If a server goes down between health checks, the reactive fallback in the request handler catches the failure and marks it as evaluating immediately.
 
 ## Graceful Shutdown
