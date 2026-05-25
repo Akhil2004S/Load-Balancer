@@ -1,3 +1,2 @@
-*.yaml
-*.yml
-*.exe
+config.yaml
+loadbalancer.exe
