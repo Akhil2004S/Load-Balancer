@@ -1,5 +1,5 @@
 # HTTP Load Balancer
-A Load Balancer created in go leveraging the power of concurrency to learn the actual working of the load balancer. It has CLI integrated, which will make it easier to access and metrics to know the performance.
+A Load Balancer created in go leveraging the power of concurrency. It has CLI integrated, which will make it easier to access and metrics to know the performance.
 ## What it does
 The Load balancer gets the required config from the config.yaml file using viper. The config file requires the port at which the load balacer should start, the algorithm to choose and the server's addresses. The load balancer has three main algorithms right now and they are Weighted Least Response time, Least connections and IP Hash. The algorithm can either be chosen in the CLI or in the config file.  
 ## Architecture
@@ -17,7 +17,7 @@ Each server consists of three health states.
 The health checker runs every second and pings each server's /health endpoint. If a server goes down between health checks, the reactive fallback in the request handler catches the failure and marks it as evaluating immediately.
 
 ## Graceful Shutdown
-Graceful shutdown ensures that the load balancer exits properly when interupped. "When Ctrl+C is received, the health checker is stopped and the load balancer exits. In-flight requests are not waited on and will be cut off. This is a known limitation and a proper implementation would use http.Server.Shutdown() with a context to drain active connections gracefully."
+Graceful shutdown ensures that the load balancer exits properly when interupped. "When Ctrl+C is received, the health checker is stopped and the load balancer exits. The requests that are queued are dropped and the server stops. This is a known limitation and can be fixed with http.Server().Shutdown()."
 
 ## Metrics
 Metrics of the load balancer is obtained using the cli command. Internally, a gRPC server is started when the load balancer starts which responds with the current metrics. The metrics can easily be obtained using API request like /metrics to the load balancer easily. But instead I have implemented a gRPC server because I thought this would be a simple way to learn the working of gRPC.  
